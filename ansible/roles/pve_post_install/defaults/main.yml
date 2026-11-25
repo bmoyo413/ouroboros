@@ -1,0 +1,14 @@
+---
+# Debian suite the node runs. PVE 9 is trixie; the role stops on anything else.
+pve_post_install_suite: trixie
+
+# Ceph release the installer configured. Matches the enterprise source it wrote,
+# swapped to the free component. Ceph itself is not used; this keeps the client
+# packages updatable the way Proxmox expects.
+pve_post_install_ceph_release: ceph-squid
+
+# Hide the "No valid subscription" popup. Re-applied after every apt run by a hook.
+pve_post_install_remove_nag: true
+
+# Reboot when the upgrade installed a newer kernel than the one running.
+pve_post_install_reboot: true

@@ -1,0 +1,10 @@
+# Copy to hosts.yml (gitignored) and fill in the real values.
+# The real hostnames and addresses never enter this repo.
+all:
+  children:
+    pve:
+      hosts:
+        node2:
+          ansible_host: 192.168.1.x
+          ansible_user: root
+          ansible_ssh_private_key_file: ~/.ssh/id_ed25519_example

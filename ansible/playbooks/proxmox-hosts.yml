@@ -1,0 +1,9 @@
+---
+# Host prep for a freshly installed Proxmox VE node.
+# Run from ansible/:  ansible-playbook playbooks/proxmox-hosts.yml --limit <node>
+- name: Prepare Proxmox VE hosts
+  hosts: pve
+  become: false
+  roles:
+    - role: pve_post_install
+      tags: post_install

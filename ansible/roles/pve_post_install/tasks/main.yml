@@ -1,0 +1,120 @@
+---
+# Post-install for a Proxmox VE 9 node without a subscription.
+# Rewritten from the community-scripts "PVE Post Install" script, keeping only:
+# free package sources, the popup hook, the upgrade, and a reboot for a new kernel.
+# Left out on purpose: high-availability toggles (nodes join a cluster), the mobile
+# UI patch, and the test repository.
+
+- name: Look for pve-version on the host
+  ansible.builtin.stat:
+    path: /usr/bin/pveversion
+  register: pve_post_install_pveversion
+
+- name: Stop unless this is Proxmox VE on Debian {{ pve_post_install_suite }}
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution_release'] == pve_post_install_suite
+      - pve_post_install_pveversion.stat.exists
+    fail_msg: "Expected Proxmox VE on Debian {{ pve_post_install_suite }}."
+    quiet: true
+
+- name: Remove the enterprise repo
+  ansible.builtin.file:
+    path: "/etc/apt/sources.list.d/{{ item }}"
+    state: absent
+  loop:
+    - pve-enterprise.sources
+    - ceph.sources
+  notify: Refresh apt cache
+
+- name: Add the free (no-subscription) repo
+  ansible.builtin.copy:
+    dest: "/etc/apt/sources.list.d/{{ item.file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: http://download.proxmox.com/debian/{{ item.path }}
+      Suites: {{ pve_post_install_suite }}
+      Components: {{ item.component }}
+      Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  loop:
+    - file: proxmox.sources
+      path: pve
+      component: pve-no-subscription
+    - file: ceph-no-subscription.sources
+      path: "{{ pve_post_install_ceph_release }}"
+      component: no-subscription
+  loop_control:
+    label: "{{ item.file }}"
+  notify: Refresh apt cache
+
+- name: Refresh the apt cache now if the sources changed
+  ansible.builtin.meta: flush_handlers
+
+# --- Subscription popup ----------------------------------------------------
+# Installed before the upgrade so the hook already covers this run.
+
+- name: Install the popup patch script
+  when: pve_post_install_remove_nag
+  ansible.builtin.copy:
+    src: pve-remove-nag.sh
+    dest: /usr/local/sbin/pve-remove-nag.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Re-apply the popup patch after every apt run # set up the apt hook
+  when: pve_post_install_remove_nag
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/90-pve-remove-nag
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by Ansible (pve_post_install). Re-hides the subscription popup
+      // after package updates restore proxmoxlib.js.
+      DPkg::Post-Invoke { "/usr/local/sbin/pve-remove-nag.sh || true"; };
+
+- name: Uninstall the popup script and apt hook when remove_nag is false
+  when: not pve_post_install_remove_nag
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/apt.conf.d/90-pve-remove-nag
+    - /usr/local/sbin/pve-remove-nag.sh
+
+# --- Upgrade ---------------------------------------------------------------
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: dist
+
+# Runs every time: patches only if an update put the original file back.
+- name: Apply the popup patch
+  when: pve_post_install_remove_nag
+  ansible.builtin.command: /usr/local/sbin/pve-remove-nag.sh
+  register: pve_post_install_nag
+  changed_when: "'patched' in pve_post_install_nag.stdout"
+
+# --- Reboot onto a new kernel ----------------------------------------------
+
+- name: Find the newest installed kernel
+  ansible.builtin.shell:
+    cmd: set -o pipefail && ls /boot/vmlinuz-* | sed 's|^/boot/vmlinuz-||' | sort -V | tail -n 1
+    executable: /bin/bash
+  register: pve_post_install_kernel
+  changed_when: false
+  check_mode: false  # read only, so a dry run still shows whether a reboot is due
+
+- name: Reboot when a newer kernel is installed
+  when:
+    - pve_post_install_reboot
+    - pve_post_install_kernel.stdout != ansible_facts['kernel']
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+    msg: "Rebooting onto kernel {{ pve_post_install_kernel.stdout }} (Ansible)"

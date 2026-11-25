@@ -1,0 +1,14 @@
+# Ansible inventory with real hosts and addresses: local only.
+ansible/inventory/hosts.yml
+
+# Key material never enters the repo.
+*.pem
+*.key
+id_*
+!id_*.pub
+
+# Local tooling
+.ansible/
+.venv/
+*.retry
+.DS_Store
