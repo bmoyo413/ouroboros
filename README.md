@@ -1,7 +1,5 @@
 <h1 align="center">ouroboros</h1>
 
-<p align="center"><b>Ansible that rebuilds my two-node Proxmox homelab from bare metal.</b></p>
-
 <p align="center">
   <img alt="Proxmox VE 9" src="https://img.shields.io/badge/Proxmox_VE-9-b2ed91?logo=proxmox&style=for-the-badge&labelColor=1d2526&logoColor=b2ed91">
   <img alt="Ansible: host prep" src="https://img.shields.io/badge/Ansible-host_prep-b2ed91?logo=ansible&style=for-the-badge&labelColor=1d2526&logoColor=b2ed91">
